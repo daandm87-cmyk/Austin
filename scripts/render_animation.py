@@ -505,9 +505,14 @@ def draw(h, path):
         m.annotate("", xy=(cx, cy), xytext=(-46 * np.cos(ang), -46 * np.sin(ang)), textcoords="offset points",
                    zorder=12, arrowprops=dict(arrowstyle="-|>,head_width=0.6,head_length=1.0", color=WHITE,
                                               lw=3.5, path_effects=[pe.withStroke(linewidth=6, foreground="#000000")]))
-        m.annotate(f"L {pc:.0f} hPa", xy=(cx, cy), xytext=(-46 * np.cos(ang) - 6, -46 * np.sin(ang) - 6),
-                   textcoords="offset points", ha="right", va="top", fontproperties=ROB_B(18), color=WHITE,
-                   path_effects=OUTLINE, zorder=12)
+        # label naast de staart van de pijl, aan de binnenkant van de kaart
+        side = 1 if np.cos(ang) < 0 else -1
+        up = np.sin(ang) > 0.5  # pijl naar boven: label eronder, anders op de hoogte van de staart
+        m.annotate(f" L {pc:.0f} hPa ", xy=(cx, cy),
+                   xytext=(-46 * np.cos(ang) + 6 * side, -46 * np.sin(ang) + (-6 if up else 0)),
+                   textcoords="offset points", ha="left" if side > 0 else "right", va="top" if up else "center",
+                   bbox=dict(boxstyle="square,pad=0.15", fc="#000000", ec="none", alpha=0.75),
+                   fontproperties=ROB_B(18), color=WHITE, zorder=12)
     m.text(lo, la, "L", fontproperties=MONT_XB(64), color="#e5262b", ha="center", va="center", zorder=12,
            clip_on=True,
            path_effects=[pe.withStroke(linewidth=13, foreground="#000000", alpha=0.55),
