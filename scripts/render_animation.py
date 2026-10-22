@@ -470,7 +470,9 @@ def draw(h, path):
 
 def render_one(args):
     idx, h = args
-    draw(h, os.path.join(FRAMES, f"f{idx:04d}.png"))
+    path = os.path.join(FRAMES, f"f{idx:04d}.png")
+    if not os.path.exists(path):  # hervatten na onderbreking
+        draw(h, path)
     return idx
 
 
@@ -485,8 +487,7 @@ def main():
         return
     hs = [0.0] * int(HOLD_START * FPS) + list(np.linspace(0, n - 1, (n - 1) * SUBSTEPS + 1)) \
         + [float(n - 1)] * int(HOLD_END * FPS)
-    shutil.rmtree(FRAMES, ignore_errors=True)
-    os.makedirs(FRAMES)
+    os.makedirs(FRAMES, exist_ok=True)
     # Stilstaande beelden maar één keer renderen
     uniq = sorted(set(hs))
     with Pool(os.cpu_count(), initializer=init_worker) as pool:
