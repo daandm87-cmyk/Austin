@@ -505,7 +505,7 @@ def main():
                     "-preset", "slow", "-movflags", "+faststart", mp4], check=True)
     gif = os.path.join(OUT, "storm_austin_icon_d2.gif")
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", mp4, "-vf",
-                    "fps=15,scale=720:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=192[p];"
+                    "fps=12,scale=540:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=128[p];"
                     "[b][p]paletteuse=dither=sierra2_4a", gif], check=True)
     shutil.rmtree(FRAMES)
     print("Klaar:", mp4, gif)

@@ -8,7 +8,7 @@ Daan-huisstijl.
 | Bestand | Inhoud |
 |---|---|
 | `output/storm_austin_icon_d2.mp4` | Animatie 1080×1350 (4:5), 30 fps |
-| `output/storm_austin_icon_d2.gif` | Lichtere GIF-versie (720 px) |
+| `output/storm_austin_icon_d2.gif` | Lichtere GIF-versie (540 px, 12 fps) |
 | `output/storm_austin_icon_d2_preview.png` | Stilstaand beeld: kern aan de Belgische kust |
 | `data/track_austin.csv` | Uurlijkse kernposities en kerndruk |
 
