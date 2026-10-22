@@ -1,0 +1,6 @@
+omfiles
+numpy
+scipy
+matplotlib
+cartopy
+pillow
