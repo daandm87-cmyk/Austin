@@ -24,7 +24,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.patheffects as pe
 import numpy as np
-from matplotlib.colors import LinearSegmentedColormap, to_rgba
+from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.font_manager import FontProperties
 from matplotlib.path import Path
 from PIL import Image
@@ -69,24 +69,26 @@ ROB = lambda s: F("Roboto-Regular", s)
 
 OUTLINE = [pe.withStroke(linewidth=3, foreground="#000000")]
 
-# Windstoten in km/u
-GUST_MIN, GUST_MAX = 30, 160
-_stops = [
-    (30, "#1f5f8b", 0.00),
-    (45, "#1f5f8b", 0.25),
-    (60, "#1aa3a3", 0.50),
-    (75, "#4cc35a", 0.68),
-    (90, GOLD, 0.82),
-    (100, "#f39c12", 0.90),
-    (110, "#e74c3c", 0.94),
-    (125, "#c0185f", 0.95),
-    (140, "#e040fb", 0.96),
-    (160, "#ffe0f7", 0.97),
-]
+# Windstoten in km/u: kleurenschaal van Meteociel (ICON-D2 "Rafales de vent max").
+# Elke klasse krijgt haar kleur in het midden; daartussen wordt vloeiend overgevloeid.
+# De klassen zijn ongelijk breed (5 → 10 → 20 km/u), dus waarden worden eerst naar
+# klasse-index omgezet, zodat elke klasse even breed is op de schaal, net als bij Meteociel.
+GUST_BOUNDS = np.array(list(range(0, 90, 5)) + list(range(90, 160, 10)) + [160, 180, 200, 220, 240, 260], float)
+GUST_COLORS = ["#ffffff", "#97e6ff", "#33ccff", "#0099ff", "#00ff99", "#33cc66", "#66cc33", "#66ff00",
+               "#a4f22f", "#b7cf0e", "#d6f017", "#cc9900", "#ee9900", "#ff9966", "#cc9999", "#cc6633",
+               "#cc3333", "#ff0d0d", "#c60000", "#800000", "#800050", "#a00077", "#cc00cc", "#ff00ff",
+               "#ff40ff", "#ff80ff", "#ffa0ff", "#ffffff", "#e3e3e3", "#c6c6c6"]
+N_CLASSES = len(GUST_COLORS)
+assert len(GUST_BOUNDS) == N_CLASSES + 1
+_pos = (np.arange(N_CLASSES) + 0.5) / N_CLASSES
 GUST_CMAP = LinearSegmentedColormap.from_list(
-    "gusts", [((v - GUST_MIN) / (GUST_MAX - GUST_MIN), to_rgba(c, a)) for v, c, a in _stops], N=512)
-GUST_CMAP_OPAQUE = LinearSegmentedColormap.from_list(
-    "gusts_opaque", [((v - GUST_MIN) / (GUST_MAX - GUST_MIN), to_rgba(c, 1.0)) for v, c, _ in _stops], N=512)
+    "meteociel_gusts", [(0.0, GUST_COLORS[0])] + list(zip(_pos, GUST_COLORS)) + [(1.0, GUST_COLORS[-1])], N=1024)
+
+
+def gust_index(v):
+    """km/u -> positie 0..1 op de klasse-schaal."""
+    return np.interp(v, GUST_BOUNDS, np.arange(N_CLASSES + 1)) / N_CLASSES
+
 
 CITIES = [  # (naam, lon, lat, label-dx, label-dy, ha)
     ("Brussel", 4.35, 50.85, 0.08, 0.05, "left"),
@@ -342,8 +344,8 @@ def draw(h, path):
     P, G = I.fields(h)
     lat, lon = D["lat"], D["lon"]
     ext = [lon[0] - 0.01, lon[-1] + 0.01, lat[0] - 0.01, lat[-1] + 0.01]
-    Gm = np.ma.masked_array(np.clip(G, GUST_MIN, GUST_MAX), D["mask"] | (G < GUST_MIN))
-    m.imshow(Gm, origin="lower", extent=ext, cmap=GUST_CMAP, vmin=GUST_MIN, vmax=GUST_MAX,
+    Gm = np.ma.masked_array(gust_index(G), D["mask"])
+    m.imshow(Gm, origin="lower", extent=ext, cmap=GUST_CMAP, vmin=0, vmax=1,
              interpolation="bilinear", zorder=2, aspect="auto")
     # Buiten het ICON-D2 domein
     out = np.ma.masked_array(np.ones_like(G), ~D["mask"])
@@ -393,15 +395,11 @@ def draw(h, path):
     Gb = np.where(be, G, -1)
     bi, bj = np.unravel_index(np.argmax(Gb), Gb.shape)
     gmax_be = G[bi, bj]
-    m.plot(lon[bj], lat[bi], marker="o", ms=17, mfc="none", mec=WHITE, mew=2.2, zorder=10,
-           path_effects=[pe.withStroke(linewidth=4.5, foreground="#000000")])
-    side = 1 if lon[bj] >= lo else -1  # label aan de kant weg van de L
-    m.text(lon[bj] + side * 0.13, lat[bi] - 0.03, f"{gmax_be:.0f}", fontproperties=ROB_B(17), color=WHITE,
-           ha="left" if side > 0 else "right", va="top", path_effects=OUTLINE, zorder=10)
 
     # De L
     m.text(lo, la, "L", fontproperties=MONT_XB(64), color="#e5262b", ha="center", va="center", zorder=12,
-           path_effects=[pe.withStroke(linewidth=8, foreground=WHITE),
+           path_effects=[pe.withStroke(linewidth=13, foreground="#000000", alpha=0.55),
+                         pe.withStroke(linewidth=8, foreground=WHITE),
                          pe.SimplePatchShadow(offset=(2, -2), alpha=0.6), pe.Normal()])
     m.text(lo, la - 0.36, f"{pc:.0f} hPa", fontproperties=ROB_B(19), color=WHITE, ha="center", va="top",
            zorder=12, path_effects=[pe.withStroke(linewidth=4, foreground="#000000")])
@@ -425,14 +423,14 @@ def draw(h, path):
     # kleurenschaal
     s.text(W / 2, STATS_H - 26, "MAXIMALE WINDSTOTEN (km/u)", fontproperties=MONT_B(19), color=GOLD,
            ha="center", va="center")
-    cb_x0, cb_x1, cb_y, cb_h = 70, W - 70, STATS_H - 64, 16
-    grad = np.linspace(GUST_MIN, GUST_MAX, 512)[None, :]
-    s.imshow(grad, extent=[cb_x0, cb_x1, cb_y, cb_y + cb_h], cmap=GUST_CMAP_OPAQUE, vmin=GUST_MIN,
-             vmax=GUST_MAX, aspect="auto", zorder=2)
-    for v in range(40, GUST_MAX + 1, 20):
-        xv = cb_x0 + (v - GUST_MIN) / (GUST_MAX - GUST_MIN) * (cb_x1 - cb_x0)
-        s.plot([xv, xv], [cb_y - 4, cb_y], color=WHITE, lw=1.2)
-        s.text(xv, cb_y - 8, f"{v}", fontproperties=ROB_B(14), color=WHITE, ha="center", va="top")
+    cb_x0, cb_x1, cb_y, cb_h = 40, W - 40, STATS_H - 64, 16
+    grad = np.linspace(0, 1, 1024)[None, :]
+    s.imshow(grad, extent=[cb_x0, cb_x1, cb_y, cb_y + cb_h], cmap=GUST_CMAP, vmin=0, vmax=1,
+             aspect="auto", zorder=2)
+    for v in GUST_BOUNDS[:-1]:
+        xv = cb_x0 + float(gust_index(v)) * (cb_x1 - cb_x0)
+        s.plot([xv, xv], [cb_y - 4, cb_y], color=WHITE, lw=1.0)
+        s.text(xv, cb_y - 7, f"{v:.0f}", fontproperties=ROB_B(12), color=WHITE, ha="center", va="top")
 
     # drie kolommen
     k = min(int(np.floor(h)), I.n - 2)
@@ -441,10 +439,9 @@ def draw(h, path):
     dla = float(I.slat(h, 1)); dlo = float(I.slon(h, 1))
     speed = haversine(la, lo, la + dla, lo + dlo)
     heading = compass(bearing(la, lo, la + dla, lo + dlo))
-    gcol = GUST_CMAP_OPAQUE((np.clip(gmax_be, GUST_MIN, GUST_MAX) - GUST_MIN) / (GUST_MAX - GUST_MIN))
     cols = [
         ("Kerndruk", f"{pc:.0f} hPa", GOLD, trend.upper(), GREY),
-        ("Max. windstoot België", f"{gmax_be:.0f} km/u", gcol, "AFGELOPEN UUR", GREY),
+        ("Max. windstoot België", f"{gmax_be:.0f} km/u", WHITE, "AFGELOPEN UUR", GREY),
         ("Positie kern", describe_position(la, lo), WHITE, f"{speed:.0f} KM/U RICHTING {heading}", GREY),
     ]
     cw = W / 3

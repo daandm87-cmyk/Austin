@@ -50,6 +50,14 @@ Tussen twee modeluren worden 16 tussenbeelden berekend.
 De tussenbeelden zijn een visuele interpolatie. De echte modelwaarden horen bij
 de hele uren.
 
+### Kleurenschaal windstoten
+
+De kleuren volgen de schaal van Meteociel voor ICON-D2 ("Rafales de vent max"),
+met 30 klassen van 0 tot 240+ km/u. Elke klasse krijgt haar kleur in het midden
+en daartussen vloeien de kleuren zonder harde grenzen in elkaar over. De klassen
+zijn ongelijk breed (stappen van 5, 10 en 20 km/u), maar staan even breed op de
+kleurenbalk, net als bij Meteociel.
+
 ## Opnieuw maken
 
 ```bash
