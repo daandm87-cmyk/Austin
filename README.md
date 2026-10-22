@@ -10,6 +10,9 @@ Daan-huisstijl.
 | `output/storm_austen_icon_d2.mp4` | Animatie 1080×1350 (4:5), 30 fps |
 | `output/storm_austen_icon_d2.gif` | Lichtere GIF-versie (540 px, 12 fps) |
 | `output/storm_austen_icon_d2_preview.png` | Stilstaand beeld: kern aan de Belgische kust |
+| `output/storm_austen_belgie_windspoor.mp4` | Ingezoomd op België: windstootsporen (hoogste windstoot sinds vr 09:00) |
+| `output/storm_austen_belgie_windspoor.gif` | GIF-versie van de windstootsporen |
+| `output/storm_austen_belgie_windspoor_preview.png` | Stilstaand beeld: volledig windspoor (za 05:00) |
 | `data/track_austen.csv` | Uurlijkse kernposities en kerndruk |
 
 ## Data
@@ -50,6 +53,16 @@ Tussen twee modeluren worden 16 tussenbeelden berekend.
 De tussenbeelden zijn een visuele interpolatie. De echte modelwaarden horen bij
 de hele uren.
 
+### Twee varianten (presets)
+
+- `kanaal` (standaard): België + oostelijk Kanaal, 23/10 09:00 tot 24/10 02:00 Belgische tijd.
+  Het windveld toont telkens de hoogste windstoot van het afgelopen uur en schuift mee met de storm.
+- `belgie`: zo dicht mogelijk ingezoomd op België, 23/10 09:00 tot 24/10 05:00 Belgische tijd.
+  Elke pixel houdt de hoogste windstoot vast die er sinds de start voorkwam. Zo ontstaan
+  de windstootsporen (swaths), zoals Meteociel's "rafales max depuis 0h". Het maximum wordt
+  over alle tussenbeelden genomen, zodat de sporen vloeiend aangroeien. Met Belgische
+  provinciegrenzen. Zodra de kern uit beeld is, wijst een pijl aan de kaartrand naar de L.
+
 ### Kleurenschaal windstoten
 
 De kleuren volgen de schaal van Meteociel voor ICON-D2 ("Rafales de vent max"),
@@ -65,7 +78,8 @@ python3 -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt
 PYTHON=python scripts/fetch_icon_d2.sh 2026/10/22/0900Z data/icon_d2   # optioneel: data staat al in de repo
 python scripts/track_low.py data/icon_d2 data/track_austen.csv
-python scripts/render_animation.py             # of --preview-only
+python scripts/render_animation.py                   # Kanaal-variant (of --preview-only)
+python scripts/render_animation.py --preset belgie   # windstootsporen boven België
 ```
 
 Lettertypen: Montserrat en Roboto (SIL Open Font License, Google Fonts),

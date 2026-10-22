@@ -7,7 +7,12 @@ velden worden langs de verplaatsing van de kern naar het tussentijdstip geschove
 en daarna gemengd. Zo glijden de windvelden en isobaren mee met de storm in plaats
 van uit- en in te faden. De L volgt een kubische spline door de uurposities.
 
-Gebruik: python render_animation.py [--preview-only]
+Presets:
+  kanaal  België + oostelijk Kanaal, windstoten van het afgelopen uur (standaard)
+  belgie  ingezoomd op België, hoogste windstoot sinds de start blijft staan
+          (windstootsporen / "swaths", zoals Meteociel "rafales max depuis 0h")
+
+Gebruik: python render_animation.py [--preset kanaal|belgie] [--preview-only]
 """
 import csv
 import glob
@@ -16,7 +21,7 @@ import shutil
 import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
-from multiprocessing import Pool
+from multiprocessing import get_context
 
 import cartopy.io.shapereader as shpreader
 import matplotlib
@@ -39,15 +44,51 @@ OUT = os.path.join(ROOT, "output")
 FRAMES = os.environ.get("FRAMES_DIR", os.path.join(OUT, "_frames"))
 
 RUN_LABEL = "do 22/10 09 UTC"
-START, END = "2026-10-23T0700", "2026-10-24T0000"
 SUBSTEPS = 16          # tussenbeelden per modeluur
 FPS = 30
 HOLD_START, HOLD_END = 1.0, 2.5  # seconden stilstand
 BE_TZ = timezone(timedelta(hours=2))  # CEST (zomertijd tot 25 okt 2026)
 
-# Kaartuitsnede: België + oostelijk Kanaal (ICON-D2 reikt niet verder dan ~2°W)
-LON0, LON1 = -2.6, 8.6
-LAT0, LAT1 = 48.70, 54.08
+# Instellingen per preset; apply_preset() zet ze als globale waarden.
+# Kaartuitsneden zijn zo gekozen dat 1080x830 px hoekgetrouw is (lon-span x cos(lat)).
+PRESETS = {
+    "kanaal": dict(
+        name="storm_austen_icon_d2",
+        start="2026-10-23T0700", end="2026-10-24T0000",
+        extent=(-2.6, 8.6, 48.70, 54.08),  # ICON-D2 reikt niet verder dan ~2°W
+        swath=False,
+        cities="kanaal",
+        hour_label_step=3,
+        provinces=False,
+        preview_h=8.0,
+        subtitle="Baan van de lagedrukkern  |  Max. windstoten",
+        bar_title="MAXIMALE WINDSTOTEN (km/u)",
+    ),
+    "belgie": dict(
+        name="storm_austen_belgie_windspoor",
+        start="2026-10-23T0700", end="2026-10-24T0300",
+        extent=(2.12, 6.82, 49.36, 51.66),  # België met een kleine rand
+        swath=True,
+        cities="belgie",
+        hour_label_step=2,
+        provinces=True,
+        preview_h=None,  # laatste beeld: volledig windspoor
+        subtitle="Baan van de lagedrukkern  |  Spoor van de max. windstoten",
+        bar_title="HOOGSTE WINDSTOOT SINDS VR 23 OKT 09:00 (km/u)",
+    ),
+}
+PRESET = None
+START = END = None
+LON0 = LON1 = LAT0 = LAT1 = None
+SC = 1.0  # schaal voor offsets in graden t.o.v. de Kanaalkaart
+
+
+def apply_preset(name):
+    global PRESET, START, END, LON0, LON1, LAT0, LAT1, SC
+    PRESET = PRESETS[name]
+    START, END = PRESET["start"], PRESET["end"]
+    LON0, LON1, LAT0, LAT1 = PRESET["extent"]
+    SC = (LON1 - LON0) / 11.2
 
 # Huisstijl
 W, H = 1080, 1350
@@ -90,7 +131,7 @@ def gust_index(v):
     return np.interp(v, GUST_BOUNDS, np.arange(N_CLASSES + 1)) / N_CLASSES
 
 
-CITIES = [  # (naam, lon, lat, label-dx, label-dy, ha)
+CITIES_KANAAL = [  # (naam, lon, lat, label-dx, label-dy, ha)
     ("Brussel", 4.35, 50.85, 0.08, 0.05, "left"),
     ("Antwerpen", 4.40, 51.22, 0.08, 0.05, "left"),
     ("Gent", 3.72, 51.05, 0.06, -0.17, "left"),
@@ -115,14 +156,47 @@ CITIES = [  # (naam, lon, lat, label-dx, label-dy, ha)
     ("Keulen", 6.96, 50.94, 0.08, 0.05, "left"),
     ("Luxemburg", 6.13, 49.61, 0.08, -0.13, "left"),
 ]
-REF_PLACES = [c for c in CITIES if c[0] in
+CITIES_BELGIE = [
+    ("Brussel", 4.35, 50.85, -0.03, 0.015, "right"),
+    ("Antwerpen", 4.40, 51.22, 0.03, 0.015, "left"),
+    ("Gent", 3.72, 51.05, 0.03, 0.015, "left"),
+    ("Brugge", 3.22, 51.21, 0.03, -0.075, "left"),
+    ("Oostende", 2.92, 51.23, -0.03, -0.075, "right"),
+    ("Kortrijk", 3.26, 50.83, 0.03, 0.015, "left"),
+    ("Ieper", 2.89, 50.85, -0.03, 0.015, "right"),
+    ("Leuven", 4.70, 50.88, 0.03, -0.075, "left"),
+    ("Mechelen", 4.48, 51.03, 0.03, 0.015, "left"),
+    ("Turnhout", 4.94, 51.32, 0.03, 0.015, "left"),
+    ("Hasselt", 5.34, 50.93, 0.03, 0.015, "left"),
+    ("Luik", 5.57, 50.63, 0.03, 0.015, "left"),
+    ("Namen", 4.87, 50.47, 0.03, 0.015, "left"),
+    ("Charleroi", 4.44, 50.41, 0.03, -0.075, "left"),
+    ("Bergen", 3.95, 50.45, -0.03, 0.015, "right"),
+    ("Doornik", 3.39, 50.61, 0.03, 0.015, "left"),
+    ("Dinant", 4.91, 50.26, 0.03, 0.015, "left"),
+    ("Bastenaken", 5.72, 50.00, 0.03, 0.015, "left"),
+    ("Aarlen", 5.82, 49.68, 0.03, 0.015, "left"),
+    ("Rijsel", 3.06, 50.63, -0.03, 0.015, "right"),
+    ("Duinkerke", 2.38, 51.03, 0.03, 0.015, "left"),
+    ("Vlissingen", 3.57, 51.44, 0.03, 0.015, "left"),
+    ("Breda", 4.78, 51.59, 0.03, -0.075, "left"),
+    ("Eindhoven", 5.47, 51.44, 0.03, 0.015, "left"),
+    ("Maastricht", 5.69, 50.85, 0.03, 0.015, "left"),
+    ("Aken", 6.08, 50.78, 0.03, 0.015, "left"),
+    ("Luxemburg", 6.13, 49.61, 0.03, 0.015, "left"),
+]
+CITY_SETS = {"kanaal": CITIES_KANAAL, "belgie": CITIES_BELGIE}
+REF_PLACES = [c for c in CITIES_KANAAL if c[0] in
               ("Brussel", "Antwerpen", "Gent", "Brugge", "Oostende", "Duinkerke", "Calais", "Dover",
                "Londen", "Brighton", "Le Havre", "Rotterdam", "Eindhoven", "Amsterdam", "Keulen", "Rijsel")]
 BELGIAN = {"Brussel", "Antwerpen", "Gent", "Brugge", "Oostende", "Zeebrugge", "Knokke-Heist", "De Panne",
-           "Nieuwpoort", "Hasselt", "Luik", "Genk", "Turnhout", "Kortrijk", "Ieper"}
+           "Nieuwpoort", "Hasselt", "Luik", "Genk", "Turnhout", "Kortrijk", "Ieper", "Leuven", "Mechelen",
+           "Namen", "Charleroi", "Bergen", "Doornik"}
 REF_PLACES += [("Zeebrugge", 3.20, 51.33), ("Knokke-Heist", 3.29, 51.35), ("De Panne", 2.59, 51.10),
                ("Nieuwpoort", 2.75, 51.13), ("Genk", 5.50, 50.97), ("Turnhout", 4.94, 51.32),
-               ("Kortrijk", 3.26, 50.83), ("Ieper", 2.89, 50.85), ("Middelburg", 3.61, 51.50), ("Vlissingen", 3.57, 51.44),
+               ("Kortrijk", 3.26, 50.83), ("Ieper", 2.89, 50.85), ("Leuven", 4.70, 50.88),
+               ("Mechelen", 4.48, 51.03), ("Namen", 4.87, 50.47), ("Charleroi", 4.44, 50.41),
+               ("Bergen", 3.95, 50.45), ("Doornik", 3.39, 50.61), ("Middelburg", 3.61, 51.50), ("Vlissingen", 3.57, 51.44),
                ("Breda", 4.78, 51.59), ("Nijmegen", 5.86, 51.84), ("Arnhem", 5.90, 51.98),
                ("Apeldoorn", 5.97, 52.21), ("Enschede", 6.89, 52.22), ("Zwolle", 6.09, 52.51),
                ("Portsmouth", -1.09, 50.80), ("Eastbourne", 0.28, 50.77), ("Folkestone", 1.18, 51.08),
@@ -179,8 +253,8 @@ def load():
     sel = list(zip(times, files))[i0:i1 + 1]
     d0 = np.load(sel[0][1])
     lat, lon = d0["lat"], d0["lon"]
-    ys = np.where((lat >= LAT0 - 0.3) & (lat <= LAT1 + 0.3))[0]
-    xs = np.where((lon >= LON0 - 0.3) & (lon <= LON1 + 0.3))[0]
+    ys = np.where((lat >= LAT0 - 1.0) & (lat <= LAT1 + 1.0))[0]
+    xs = np.where((lon >= LON0 - 1.0) & (lon <= LON1 + 1.0))[0]
     crop = np.ix_(ys, xs)
     P, G = [], []
     for _, f in sel:
@@ -235,6 +309,14 @@ def map_lines():
         for g in getattr(geom, "geoms", [geom]):
             land.append(np.asarray(g.exterior.coords))
     out["land"] = land
+    prov = []
+    if PRESET["provinces"]:
+        for rec in shpreader.Reader(shpreader.natural_earth("10m", "cultural",
+                                                           "admin_1_states_provinces_lines")).records():
+            if rec.attributes["ADM0_NAME"] == "Belgium":
+                for g in getattr(rec.geometry, "geoms", [rec.geometry]):
+                    prov.append(np.asarray(g.coords))
+    out["provinces"] = prov
     return out
 
 
@@ -283,8 +365,19 @@ class Interp:
         return out
 
 
+def running_max(I, hs):
+    """Hoogste windstoot tot en met elk tijdstip in hs (oplopend, op het tussenbeeldenrooster)."""
+    out, acc = {}, None
+    for h in hs:
+        g = I.fields(h)[1]
+        acc = g.astype(np.float32) if acc is None else np.maximum(acc, g)
+        out[h] = acc.copy()
+    return out
+
+
 # ---------------------------------------------------------------------------- tekenen
 STATIC = {}
+SWATH = {}  # h -> cumulatief maximum (preset 'belgie'), via fork gedeeld met de workers
 
 
 def init_worker():
@@ -321,8 +414,8 @@ def draw(h, path):
     ax.add_patch(plt.Rectangle((0, 0), 1, 1, color=NAVY, transform=ax.transAxes))
     ax.text(0.028, 0.70, "STORM AUSTEN", fontproperties=MONT_XB(64), color=GOLD, va="center",
             transform=ax.transAxes)
-    ax.text(0.030, 0.39, "Baan van de lagedrukkern  |  Max. windstoten", fontproperties=ROB_B(27),
-            color=WHITE, va="center", transform=ax.transAxes)
+    fit_text(fig, ax, 0.030, 0.39, PRESET["subtitle"], ROB_B, 27, W - 230,
+             color=WHITE, va="center", transform=ax.transAxes)
     t_utc = D["times"][0] + timedelta(hours=h)
     t_be = t_utc.astimezone(BE_TZ)
     ax.text(0.030, 0.15, f"{DAYS_LONG[t_be.weekday()].capitalize()} {t_be.day} oktober 2026  |  "
@@ -344,6 +437,8 @@ def draw(h, path):
     P, G = I.fields(h)
     lat, lon = D["lat"], D["lon"]
     ext = [lon[0] - 0.01, lon[-1] + 0.01, lat[0] - 0.01, lat[-1] + 0.01]
+    if PRESET["swath"]:
+        G = SWATH[h]
     Gm = np.ma.masked_array(gust_index(G), D["mask"])
     m.imshow(Gm, origin="lower", extent=ext, cmap=GUST_CMAP, vmin=0, vmax=1,
              interpolation="bilinear", zorder=2, aspect="auto")
@@ -351,23 +446,28 @@ def draw(h, path):
     out = np.ma.masked_array(np.ones_like(G), ~D["mask"])
     m.imshow(out, origin="lower", extent=ext, cmap=LinearSegmentedColormap.from_list("o", ["#0b1720", "#0b1720"]),
              alpha=0.82, interpolation="nearest", zorder=3, aspect="auto")
-    m.text(-2.55, 48.78, "buiten\nICON-D2-\ndomein", fontproperties=ROB_B(14), color="#6f8796", zorder=4,
-           va="bottom", ha="left", linespacing=1.1)
+    if LON0 < -2:
+        m.text(-2.55, 48.78, "buiten\nICON-D2-\ndomein", fontproperties=ROB_B(14), color="#6f8796", zorder=4,
+               va="bottom", ha="left", linespacing=1.1)
 
     for seg in L["coast"]:
-        m.plot(seg[:, 0], seg[:, 1], color="#9fb4c1", lw=0.8, zorder=4)
+        m.plot(seg[:, 0], seg[:, 1], color="#9fb4c1" if not PRESET["swath"] else "#111111",
+               lw=0.8 if not PRESET["swath"] else 1.3, zorder=4)
+    for seg in L["provinces"]:
+        m.plot(seg[:, 0], seg[:, 1], color="#000000", lw=0.6, zorder=4, alpha=0.45)
     for seg in L["borders"]:
-        m.plot(seg[:, 0], seg[:, 1], color="#c9d6de", lw=1.1, zorder=4, alpha=0.85)
+        m.plot(seg[:, 0], seg[:, 1], color="#c9d6de" if not PRESET["swath"] else "#111111",
+               lw=1.1 if not PRESET["swath"] else 1.6, zorder=4, alpha=0.85)
 
     # Isobaren (elke 2 hPa)
     Pm = np.ma.masked_array(P, D["mask"])
     lv = np.arange(960, 1040, 2)
     m.contour(lon, lat, Pm, levels=lv, colors=WHITE, linewidths=0.8, alpha=0.5, zorder=5)
 
-    for name, x, yy, dx, dy, ha in CITIES:
+    for name, x, yy, dx, dy, ha in CITY_SETS[PRESET["cities"]]:
         m.plot(x, yy, "o", ms=5, color=WHITE, mec="#000000", mew=0.8, zorder=6)
         m.text(x + dx, yy + dy, name, fontproperties=ROB_B(16), color=WHITE, ha=ha, va="bottom",
-               path_effects=OUTLINE, zorder=6)
+               path_effects=OUTLINE, zorder=6, clip_on=True)
 
     # Baan: afgelegd (goud) en verwacht (gestippeld)
     hh_all = np.linspace(0, I.n - 1, 600)
@@ -385,10 +485,10 @@ def draw(h, path):
             continue
         m.plot(D["tlon"][k], D["tlat"][k], "o", ms=7, color=GOLD, mec="#000000", mew=1.2, zorder=9)
         # uurlabels verbergen zodra de L erover schuift
-        if k % 3 == 0 and haversine(la, lo, D["tlat"][k], D["tlon"][k]) > 45:
+        if k % PRESET["hour_label_step"] == 0 and haversine(la, lo, D["tlat"][k], D["tlon"][k]) > 45 * SC:
             tl = (D["times"][k]).astimezone(BE_TZ)
-            m.text(D["tlon"][k] + 0.05, D["tlat"][k] - 0.2, f"{tl:%H}u", fontproperties=ROB_B(14),
-                   color=GOLD, path_effects=OUTLINE, zorder=9, ha="left")
+            m.text(D["tlon"][k] + 0.05 * SC, D["tlat"][k] - 0.2 * SC, f"{tl:%H}u", fontproperties=ROB_B(14),
+                   color=GOLD, path_effects=OUTLINE, zorder=9, ha="left", clip_on=True)
 
     # Hoogste windstoot in België
     be = STATIC["be"] & ~D["mask"]
@@ -396,13 +496,25 @@ def draw(h, path):
     bi, bj = np.unravel_index(np.argmax(Gb), Gb.shape)
     gmax_be = G[bi, bj]
 
-    # De L
+    # De L (buiten beeld: pijl aan de kaartrand richting de kern)
+    inside = LON0 < lo < LON1 and LAT0 < la < LAT1
+    if not inside:
+        mx, my = 0.035 * (LON1 - LON0), 0.05 * (LAT1 - LAT0)
+        cx, cy = np.clip(lo, LON0 + mx, LON1 - mx), np.clip(la, LAT0 + my, LAT1 - my)
+        ang = np.arctan2((la - cy) / (LAT1 - LAT0) * MAP_H, (lo - cx) / (LON1 - LON0) * W)
+        m.annotate("", xy=(cx, cy), xytext=(-46 * np.cos(ang), -46 * np.sin(ang)), textcoords="offset points",
+                   zorder=12, arrowprops=dict(arrowstyle="-|>,head_width=0.6,head_length=1.0", color=WHITE,
+                                              lw=3.5, path_effects=[pe.withStroke(linewidth=6, foreground="#000000")]))
+        m.annotate(f"L {pc:.0f} hPa", xy=(cx, cy), xytext=(-46 * np.cos(ang) - 6, -46 * np.sin(ang) - 6),
+                   textcoords="offset points", ha="right", va="top", fontproperties=ROB_B(18), color=WHITE,
+                   path_effects=OUTLINE, zorder=12)
     m.text(lo, la, "L", fontproperties=MONT_XB(64), color="#e5262b", ha="center", va="center", zorder=12,
+           clip_on=True,
            path_effects=[pe.withStroke(linewidth=13, foreground="#000000", alpha=0.55),
                          pe.withStroke(linewidth=8, foreground=WHITE),
                          pe.SimplePatchShadow(offset=(2, -2), alpha=0.6), pe.Normal()])
-    m.text(lo, la - 0.36, f"{pc:.0f} hPa", fontproperties=ROB_B(19), color=WHITE, ha="center", va="top",
-           zorder=12, path_effects=[pe.withStroke(linewidth=4, foreground="#000000")])
+    m.text(lo, la - 0.36 * max(SC, 0.55), f"{pc:.0f} hPa", fontproperties=ROB_B(19), color=WHITE, ha="center", va="top",
+           zorder=12, path_effects=[pe.withStroke(linewidth=4, foreground="#000000")], clip_on=True)
 
     # Tijdlabel (zoals 'VALID' in de waarschuwingskaarten)
     m.text(0.012, 0.985, f" GELDIG: {DAYS[t_be.weekday()].upper()} {t_be.day} OKT {t_be:%H:%M} ",
@@ -421,8 +533,8 @@ def draw(h, path):
     s.add_patch(plt.Rectangle((0, 0), W, STATS_H, color=NAVY))
     s.add_patch(plt.Rectangle((0, STATS_H - 3), W, 3, color=GOLD))
     # kleurenschaal
-    s.text(W / 2, STATS_H - 26, "MAXIMALE WINDSTOTEN (km/u)", fontproperties=MONT_B(19), color=GOLD,
-           ha="center", va="center")
+    fit_text(fig, s, W / 2, STATS_H - 26, PRESET["bar_title"], MONT_B, 19, W - 60, color=GOLD,
+             ha="center", va="center")
     cb_x0, cb_x1, cb_y, cb_h = 40, W - 40, STATS_H - 64, 16
     grad = np.linspace(0, 1, 1024)[None, :]
     s.imshow(grad, extent=[cb_x0, cb_x1, cb_y, cb_y + cb_h], cmap=GUST_CMAP, vmin=0, vmax=1,
@@ -441,7 +553,8 @@ def draw(h, path):
     heading = compass(bearing(la, lo, la + dla, lo + dlo))
     cols = [
         ("Kerndruk", f"{pc:.0f} hPa", GOLD, trend.upper(), GREY),
-        ("Max. windstoot België", f"{gmax_be:.0f} km/u", WHITE, "AFGELOPEN UUR", GREY),
+        ("Max. windstoot België", f"{gmax_be:.0f} km/u", WHITE,
+         "SINDS VR 09:00" if PRESET["swath"] else "AFGELOPEN UUR", GREY),
         ("Positie kern", describe_position(la, lo), WHITE, f"{speed:.0f} KM/U RICHTING {heading}", GREY),
     ]
     cw = W / 3
@@ -475,19 +588,28 @@ def render_one(args):
 
 def main():
     preview_only = "--preview-only" in sys.argv
+    preset = sys.argv[sys.argv.index("--preset") + 1] if "--preset" in sys.argv else "kanaal"
+    apply_preset(preset)
+    name = PRESET["name"]
     os.makedirs(OUT, exist_ok=True)
     init_worker()
     n = STATIC["I"].n
-    # Preview: kern aan de Belgische kust (15 UTC)
-    draw(float(os.environ.get("PREVIEW_H", 8.0)), os.path.join(OUT, "storm_austen_icon_d2_preview.png"))
+    grid = list(np.linspace(0, n - 1, (n - 1) * SUBSTEPS + 1))
+    if PRESET["swath"]:
+        SWATH.update(running_max(STATIC["I"], grid))
+    ph = PRESET["preview_h"]
+    ph = float(os.environ.get("PREVIEW_H", ph if ph is not None else n - 1))
+    if PRESET["swath"] and ph not in SWATH:
+        SWATH.update(running_max(STATIC["I"], [x for x in grid if x < ph] + [ph]))
+    draw(ph, os.path.join(OUT, f"{name}_preview.png"))
     if preview_only:
         return
-    hs = [0.0] * int(HOLD_START * FPS) + list(np.linspace(0, n - 1, (n - 1) * SUBSTEPS + 1)) \
-        + [float(n - 1)] * int(HOLD_END * FPS)
+    hs = [0.0] * int(HOLD_START * FPS) + grid + [float(n - 1)] * int(HOLD_END * FPS)
     os.makedirs(FRAMES, exist_ok=True)
     # Stilstaande beelden maar één keer renderen
     uniq = sorted(set(hs))
-    with Pool(os.cpu_count(), initializer=init_worker) as pool:
+    # fork: workers erven preset en windspoor (SWATH) van dit proces
+    with get_context("fork").Pool(os.cpu_count(), initializer=init_worker) as pool:
         for i, _ in enumerate(pool.imap_unordered(render_one, list(enumerate(uniq))), 1):
             if i % 25 == 0:
                 print(f"{i}/{len(uniq)} beelden", flush=True)
@@ -496,11 +618,11 @@ def main():
     with open(lst, "w") as fh:
         for o in order:
             fh.write(f"file 'f{o:04d}.png'\nduration {1 / FPS:.6f}\n")
-    mp4 = os.path.join(OUT, "storm_austen_icon_d2.mp4")
+    mp4 = os.path.join(OUT, f"{name}.mp4")
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", lst,
                     "-r", str(FPS), "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18",
                     "-preset", "slow", "-movflags", "+faststart", mp4], check=True)
-    gif = os.path.join(OUT, "storm_austen_icon_d2.gif")
+    gif = os.path.join(OUT, f"{name}.gif")
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", mp4, "-vf",
                     "fps=12,scale=540:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=128[p];"
                     "[b][p]paletteuse=dither=sierra2_4a", gif], check=True)
