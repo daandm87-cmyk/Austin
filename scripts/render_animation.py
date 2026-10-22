@@ -359,10 +359,10 @@ def draw(h, path):
     for seg in L["borders"]:
         m.plot(seg[:, 0], seg[:, 1], color="#c9d6de", lw=1.1, zorder=4, alpha=0.85)
 
-    # Isobaren (elke 4 hPa)
+    # Isobaren (elke 2 hPa)
     Pm = np.ma.masked_array(P, D["mask"])
-    lv = np.arange(960, 1040, 4)
-    m.contour(lon, lat, Pm, levels=lv, colors=WHITE, linewidths=0.9, alpha=0.55, zorder=5)
+    lv = np.arange(960, 1040, 2)
+    m.contour(lon, lat, Pm, levels=lv, colors=WHITE, linewidths=0.8, alpha=0.5, zorder=5)
 
     for name, x, yy, dx, dy, ha in CITIES:
         m.plot(x, yy, "o", ms=5, color=WHITE, mec="#000000", mew=0.8, zorder=6)
