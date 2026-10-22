@@ -1,4 +1,4 @@
-"""Animatie: baan van de lagedrukkern (L) van storm Austin boven de maximale windstoten (ICON-D2).
+"""Animatie: baan van de lagedrukkern (L) van storm Austen boven de maximale windstoten (ICON-D2).
 
 Huisstijl Downburst Daan, Nederlandstalig, 1080x1350 (4:5, sociale media).
 
@@ -33,7 +33,7 @@ from scipy.ndimage import gaussian_filter, map_coordinates
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, "data", "icon_d2")
-TRACK = os.path.join(ROOT, "data", "track_austin.csv")
+TRACK = os.path.join(ROOT, "data", "track_austen.csv")
 ASSETS = os.path.join(ROOT, "assets")
 OUT = os.path.join(ROOT, "output")
 FRAMES = os.environ.get("FRAMES_DIR", os.path.join(OUT, "_frames"))
@@ -319,7 +319,7 @@ def draw(h, path):
     y, hh = fy(0, HEADER_H)
     ax = fig.add_axes([0, y, 1, hh]); ax.set_axis_off()
     ax.add_patch(plt.Rectangle((0, 0), 1, 1, color=NAVY, transform=ax.transAxes))
-    ax.text(0.028, 0.70, "STORM AUSTIN", fontproperties=MONT_XB(64), color=GOLD, va="center",
+    ax.text(0.028, 0.70, "STORM AUSTEN", fontproperties=MONT_XB(64), color=GOLD, va="center",
             transform=ax.transAxes)
     ax.text(0.030, 0.39, "Baan van de lagedrukkern  |  Max. windstoten", fontproperties=ROB_B(27),
             color=WHITE, va="center", transform=ax.transAxes)
@@ -479,7 +479,7 @@ def main():
     init_worker()
     n = STATIC["I"].n
     # Preview: kern aan de Belgische kust (15 UTC)
-    draw(float(os.environ.get("PREVIEW_H", 8.0)), os.path.join(OUT, "storm_austin_icon_d2_preview.png"))
+    draw(float(os.environ.get("PREVIEW_H", 8.0)), os.path.join(OUT, "storm_austen_icon_d2_preview.png"))
     if preview_only:
         return
     hs = [0.0] * int(HOLD_START * FPS) + list(np.linspace(0, n - 1, (n - 1) * SUBSTEPS + 1)) \
@@ -496,11 +496,11 @@ def main():
     with open(lst, "w") as fh:
         for o in order:
             fh.write(f"file 'f{o:04d}.png'\nduration {1 / FPS:.6f}\n")
-    mp4 = os.path.join(OUT, "storm_austin_icon_d2.mp4")
+    mp4 = os.path.join(OUT, "storm_austen_icon_d2.mp4")
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", lst,
                     "-r", str(FPS), "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18",
                     "-preset", "slow", "-movflags", "+faststart", mp4], check=True)
-    gif = os.path.join(OUT, "storm_austin_icon_d2.gif")
+    gif = os.path.join(OUT, "storm_austen_icon_d2.gif")
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", mp4, "-vf",
                     "fps=12,scale=540:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=128[p];"
                     "[b][p]paletteuse=dither=sierra2_4a", gif], check=True)

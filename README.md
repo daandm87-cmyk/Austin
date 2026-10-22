@@ -1,16 +1,16 @@
-# Storm Austin – baan van de lagedrukkern (ICON-D2)
+# Storm Austen – baan van de lagedrukkern (ICON-D2)
 
-Animatie van de positie en de baan van de lagedrukkern (**L**) van storm Austin,
+Animatie van de positie en de baan van de lagedrukkern (**L**) van storm Austen,
 geplaatst boven de **maximale windstoten** van het ICON-D2-model. De kaart focust
 op België en het (oostelijke) Kanaal. Alles is in het Nederlands, in de Downburst
 Daan-huisstijl.
 
 | Bestand | Inhoud |
 |---|---|
-| `output/storm_austin_icon_d2.mp4` | Animatie 1080×1350 (4:5), 30 fps |
-| `output/storm_austin_icon_d2.gif` | Lichtere GIF-versie (540 px, 12 fps) |
-| `output/storm_austin_icon_d2_preview.png` | Stilstaand beeld: kern aan de Belgische kust |
-| `data/track_austin.csv` | Uurlijkse kernposities en kerndruk |
+| `output/storm_austen_icon_d2.mp4` | Animatie 1080×1350 (4:5), 30 fps |
+| `output/storm_austen_icon_d2.gif` | Lichtere GIF-versie (540 px, 12 fps) |
+| `output/storm_austen_icon_d2_preview.png` | Stilstaand beeld: kern aan de Belgische kust |
+| `data/track_austen.csv` | Uurlijkse kernposities en kerndruk |
 
 ## Data
 
@@ -64,7 +64,7 @@ kleurenbalk, net als bij Meteociel.
 python3 -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt
 PYTHON=python scripts/fetch_icon_d2.sh 2026/10/22/0900Z data/icon_d2   # optioneel: data staat al in de repo
-python scripts/track_low.py data/icon_d2 data/track_austin.csv
+python scripts/track_low.py data/icon_d2 data/track_austen.csv
 python scripts/render_animation.py             # of --preview-only
 ```
 

@@ -1,4 +1,4 @@
-"""Volg de lagedrukkern van storm Austin uur per uur in de ICON-D2 MSLP-velden.
+"""Volg de lagedrukkern van storm Austen uur per uur in de ICON-D2 MSLP-velden.
 
 Vertrekt vanaf een referentietijdstip en zoekt vooruit en achteruit het minimum
 van het (licht afgevlakte) drukveld binnen een zoekvenster rond de verwachte
