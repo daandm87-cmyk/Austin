@@ -37,13 +37,14 @@ from scipy.interpolate import CubicSpline
 from scipy.ndimage import gaussian_filter, map_coordinates
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATA = os.path.join(ROOT, "data", "icon_d2")
-TRACK = os.path.join(ROOT, "data", "track_austen.csv")
+# Andere run: ICON_DATA, ICON_TRACK en RUN_LABEL als omgevingsvariabelen meegeven
+DATA = os.environ.get("ICON_DATA", os.path.join(ROOT, "data", "icon_d2"))
+TRACK = os.environ.get("ICON_TRACK", os.path.join(ROOT, "data", "track_austen.csv"))
 ASSETS = os.path.join(ROOT, "assets")
 OUT = os.path.join(ROOT, "output")
 FRAMES = os.environ.get("FRAMES_DIR", os.path.join(OUT, "_frames"))
 
-RUN_LABEL = "do 22/10 09 UTC"
+RUN_LABEL = os.environ.get("RUN_LABEL", "do 22/10 09 UTC")
 SUBSTEPS = 16          # tussenbeelden per modeluur
 FPS = 30
 HOLD_START, HOLD_END = 1.0, 2.5  # seconden stilstand
@@ -513,13 +514,15 @@ def draw(h, path):
                    textcoords="offset points", ha="left" if side > 0 else "right", va="top" if up else "center",
                    bbox=dict(boxstyle="square,pad=0.15", fc="#000000", ec="none", alpha=0.75),
                    fontproperties=ROB_B(18), color=WHITE, zorder=12)
-    m.text(lo, la, "L", fontproperties=MONT_XB(64), color="#e5262b", ha="center", va="center", zorder=12,
-           clip_on=True,
-           path_effects=[pe.withStroke(linewidth=13, foreground="#000000", alpha=0.55),
-                         pe.withStroke(linewidth=8, foreground=WHITE),
-                         pe.SimplePatchShadow(offset=(2, -2), alpha=0.6), pe.Normal()])
-    m.text(lo, la - 0.36 * max(SC, 0.55), f"{pc:.0f} hPa", fontproperties=ROB_B(19), color=WHITE, ha="center", va="top",
-           zorder=12, path_effects=[pe.withStroke(linewidth=4, foreground="#000000")], clip_on=True)
+    if inside:  # geen halve L naast de pijl wanneer de kern de kaart verlaat
+        m.text(lo, la, "L", fontproperties=MONT_XB(64), color="#e5262b", ha="center", va="center", zorder=12,
+               clip_on=True,
+               path_effects=[pe.withStroke(linewidth=13, foreground="#000000", alpha=0.55),
+                             pe.withStroke(linewidth=8, foreground=WHITE),
+                             pe.SimplePatchShadow(offset=(2, -2), alpha=0.6), pe.Normal()])
+        m.text(lo, la - 0.36 * max(SC, 0.55), f"{pc:.0f} hPa", fontproperties=ROB_B(19), color=WHITE,
+               ha="center", va="top", zorder=12, path_effects=[pe.withStroke(linewidth=4, foreground="#000000")],
+               clip_on=True)
 
     # Tijdlabel (zoals 'VALID' in de waarschuwingskaarten)
     m.text(0.012, 0.985, f" GELDIG: {DAYS[t_be.weekday()].upper()} {t_be.day} OKT {t_be:%H:%M} ",
