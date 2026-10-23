@@ -75,7 +75,7 @@ PRESETS = {
         provinces=True,
         preview_h=None,  # laatste beeld: volledig windspoor
         subtitle="Baan van de lagedrukkern  |  Spoor van de max. windstoten",
-        bar_title="HOOGSTE WINDSTOOT SINDS VR 23 OKT 09:00 (km/u)",
+        bar_title="HOOGSTE WINDSTOOT SINDS {since_long} (km/u)",
     ),
 }
 PRESET = None
@@ -87,7 +87,14 @@ SC = 1.0  # schaal voor offsets in graden t.o.v. de Kanaalkaart
 def apply_preset(name):
     global PRESET, START, END, LON0, LON1, LAT0, LAT1, SC
     PRESET = PRESETS[name]
+    # Starttijd overschrijfbaar (bv. een latere run die pas later begint): SWATH_START=2026-10-23T1000
+    PRESET = dict(PRESET, start=os.environ.get("SWATH_START", PRESET["start"]))
     START, END = PRESET["start"], PRESET["end"]
+    # Windstoot op tijdstip t is het maximum van het voorgaande uur: het spoor loopt vanaf t - 1 u
+    since = (parse_t(START) - timedelta(hours=1)).astimezone(BE_TZ)
+    PRESET["since_short"] = f"SINDS {DAYS[since.weekday()].upper()} {since:%H:%M}"
+    PRESET["bar_title"] = PRESET["bar_title"].format(
+        since_long=f"{DAYS[since.weekday()].upper()} {since.day} OKT {since:%H:%M}")
     LON0, LON1, LAT0, LAT1 = PRESET["extent"]
     SC = (LON1 - LON0) / 11.2
 
@@ -562,7 +569,7 @@ def draw(h, path):
     cols = [
         ("Kerndruk", f"{pc:.0f} hPa", GOLD, trend.upper(), GREY),
         ("Max. windstoot België", f"{gmax_be:.0f} km/u", WHITE,
-         "SINDS VR 09:00" if PRESET["swath"] else "AFGELOPEN UUR", GREY),
+         PRESET["since_short"] if PRESET["swath"] else "AFGELOPEN UUR", GREY),
         ("Positie kern", describe_position(la, lo), WHITE, f"{speed:.0f} KM/U RICHTING {heading}", GREY),
     ]
     cw = W / 3
