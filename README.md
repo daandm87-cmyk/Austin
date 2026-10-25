@@ -15,6 +15,9 @@ Daan-huisstijl.
 | `output/storm_austen_belgie_windspoor_preview.png` | Stilstaand beeld: volledig windspoor (za 05:00) |
 | `data/track_austen.csv` | Uurlijkse kernposities en kerndruk |
 
+> **Huisstijl, formats, drempels en wat op Facebook werkte: zie [`DOCS.md`](DOCS.md).**
+> Dit bestand beschrijft hoe de scripts werken, `DOCS.md` beschrijft waarom.
+
 ## Data
 
 - Model: **ICON-D2** (DWD), run **donderdag 22 oktober 2026, 09 UTC**.
