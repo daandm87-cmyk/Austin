@@ -171,7 +171,7 @@ def main():
 
     # ---------- kleurenbalk
     maps_bottom = top + 38 + ph
-    cb_y, cb_h = maps_bottom + 46, 17
+    cb_y, cb_h = maps_bottom + 50, 17
     c = fig.add_axes([0.08, 1 - (cb_y + cb_h) / H, 0.84, cb_h / H])
     c.imshow(np.linspace(0, 1, 512)[None, :], cmap=SNOW_CMAP, vmin=0, vmax=1, aspect="auto",
              extent=[0, 1, 0, 1])
@@ -184,13 +184,14 @@ def main():
         c.annotate("%g" % v, xy=(xv, 0), xytext=(0, -7), textcoords="offset points",
                    fontproperties=ROB_B(13), color=WHITE, ha="center", va="top",
                    annotation_clip=False)
-    c.text(0.5, 1.0, "SNEEUWVAL IN MM WATER  (≈ cm sneeuw bij 10:1)", transform=c.transAxes,
-           fontproperties=MONT_B(16), color=GOLD, ha="center", va="bottom",
-           bbox=dict(boxstyle="square,pad=0.35", fc=NAVY, ec="none"))
+    c.annotate("SNEEUWVAL IN MM WATER  (≈ cm sneeuw bij 10:1)", xy=(0.5, 1.0),
+               xycoords="axes fraction", xytext=(0, 12), textcoords="offset points",
+               fontproperties=MONT_B(16), color=GOLD, ha="center", va="bottom",
+               annotation_clip=False)
 
     # ---------- staafdiagram per plaats
-    bar_top = cb_y + cb_h + 118
-    bar_h = 232
+    bar_top = cb_y + cb_h + 135
+    bar_h = 218
     b = fig.add_axes([0.095, 1 - (bar_top + bar_h) / H, 0.85, bar_h / H], facecolor=NAVY)
     for sp in b.spines.values():
         sp.set_visible(False)
