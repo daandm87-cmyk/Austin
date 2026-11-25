@@ -57,15 +57,11 @@ T1 = datetime(2026, 11, 30)
 SPAN = (T1 - T0).total_seconds()
 FPS = 30
 
-# Segment lengths in seconds. Pacing rule: every segment gets a lead-in so the
-# layout can be read before anything moves, a sweep, narrative pauses on the two
-# moments that carry the story, and a hold long enough to read the finished state.
-A_LEAD, A_SWEEP, A_HOLD = 1.2, 11.0, 3.0
+# Segment lengths in seconds: a short lead-in, a continuous sweep, and a hold on
+# the finished state.
+A_LEAD, A_SWEEP, A_HOLD = 1.2, 16.0, 3.0
 B_LEAD, B_SWEEP, B_HOLD = 1.0, 17.0, 3.5
 C_STAGES = [1.8, 2.2, 2.5, 2.5]          # hero / numbers / records / all
-BEAT_SEP, BEAT_OCT = datetime(2026, 9, 21), datetime(2026, 10, 8, 12)
-A_BEATS = {BEAT_OCT: 1.2}
-B_BEATS = {BEAT_SEP: 1.2, BEAT_OCT: 1.6}
 
 MAPS = {  # basin -> (lon0, lon1, lat0, lat1)
     "atlantic": (-102, -18, 9.5, 43),
@@ -377,29 +373,18 @@ def one(args):
     return i
 
 
-def _frac_of(d):
-    return (d - T0).total_seconds() / SPAN
-
-
-def _sweep(seg, lead, length, hold, beats):
-    """Lead-in, sweep with a pause on each beat date, then a hold on the end state."""
+def _sweep(seg, lead, length, hold):
+    """Lead-in, continuous sweep, then a hold on the end state."""
     seq = [(seg, 0.0)] * int(lead * FPS)
-    fr = list(np.linspace(0, 1, int(length * FPS)))
-    marks = sorted((_frac_of(d), n) for d, n in beats.items())
-    mi = 0
-    for t in fr:
-        seq.append((seg, t))
-        if mi < len(marks) and t >= marks[mi][0]:
-            seq += [(seg, t)] * int(marks[mi][1] * FPS)   # pause on the cached frame
-            mi += 1
+    seq += [(seg, t) for t in np.linspace(0, 1, int(length * FPS))]
     seq += [(seg, 1.0)] * int(hold * FPS)
     return seq
 
 
 def plan():
     """(segment, frac) per output frame, in order."""
-    seq = _sweep("A", A_LEAD, A_SWEEP, A_HOLD, A_BEATS)
-    seq += _sweep("B", B_LEAD, B_SWEEP, B_HOLD, B_BEATS)
+    seq = _sweep("A", A_LEAD, A_SWEEP, A_HOLD)
+    seq += _sweep("B", B_LEAD, B_SWEEP, B_HOLD)
     n = len(C_STAGES) - 1
     for i, secs in enumerate(C_STAGES):
         seq += [("C", i / n)] * int(secs * FPS)
