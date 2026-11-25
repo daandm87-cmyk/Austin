@@ -61,7 +61,6 @@ FPS = 30
 # the finished state.
 A_LEAD, A_SWEEP, A_HOLD = 1.2, 16.0, 3.0
 B_LEAD, B_SWEEP, B_HOLD = 1.0, 17.0, 3.5
-C_STAGES = [1.8, 2.2, 2.5, 2.5]          # hero / numbers / records / all
 
 MAPS = {  # basin -> (lon0, lon1, lat0, lat1)
     "atlantic": (-102, -18, 9.5, 43),
@@ -285,64 +284,135 @@ def seg_b(fig, frac, D):
 
 
 # ----------------------------------------------------------------- segment C
-def seg_c(fig, frac, D):
-    """frac encodes the reveal stage: 0 hero, 1 +numbers, 2 +records, 3 +note."""
-    stage = int(round(frac * (len(C_STAGES) - 1)))
-    header(fig, "A tale of two oceans", "Season ends November 30")
+# Scorecard timeline. Panels slide in from alternating sides, text types out.
+TYPE_CPS = {"big": 28, "mid": 42, "small": 55}   # characters per second
+SLIDE_S = 0.55
+C_HOLD = 4.5
+
+
+def _ease(p):
+    p = min(max(p, 0.0), 1.0)
+    return 1 - (1 - p) ** 3
+
+
+def _c_items(D):
+    """Every scorecard element with its own start time, in reading order."""
     atl = [r for r in D["season"] if r["basin"] == "atlantic"]
     ep = [r for r in D["season"] if r["basin"] == "epac"]
     HU = lambda rs: sum(1 for r in rs if r["peak_category"].startswith("C"))
     MJ = lambda rs: sum(1 for r in rs if r["peak_category"] in ("C3", "C4", "C5"))
+    items, t = [], 0.0
 
-    hero = px_axes(fig, 368, 196)
-    hero.add_patch(plt.Rectangle((40, 0), W - 80, 196, color=PANEL))
-    hero.text(W / 2, 150, "The Atlantic's first hurricane arrived on OCTOBER 8",
-              fontproperties=ROB_B(22), color=WHITE, ha="center", va="center")
-    hero.text(W / 2, 92, "LATEST ON RECORD SINCE 1905", fontproperties=MONT_XB(37),
-              color=GOLD, ha="center", va="center")
-    hero.text(W / 2, 36, "Only 1907 and 1914 went a whole season without one",
-              fontproperties=ROB(17), color=GREY, ha="center", va="center")
+    def slide(**kw):
+        nonlocal t
+        items.append(dict(kind="slide", t0=t, **kw)); t += kw.pop("gap", SLIDE_S)
 
-    if stage < 1:
-        footer(fig)
-        return
-    hd = px_axes(fig, 590, 50)
-    hd.text(W * 0.27, 20, "ATLANTIC", fontproperties=MONT_B(25), color=ATL, ha="center", va="center")
-    hd.text(W * 0.73, 20, "EAST PACIFIC", fontproperties=MONT_B(25), color=EPAC, ha="center", va="center")
+    def typed(text, size, gap=0.12, **kw):
+        nonlocal t
+        dur = len(text) / TYPE_CPS[size]
+        items.append(dict(kind="type", t0=t, dur=dur, text=text, **kw)); t += dur + gap
+
+    slide(name="hero", top=368, h=196, side=-1)
+    typed("The Atlantic's first hurricane arrived on OCTOBER 8", "mid",
+          ax=("hero", 150), font=ROB_B(22), color=WHITE)
+    typed("LATEST ON RECORD SINCE 1905", "big", ax=("hero", 92), font=MONT_XB(37), color=GOLD)
+    typed("Only 1907 and 1914 went a whole season without one", "small",
+          ax=("hero", 36), font=ROB(17), color=GREY, gap=0.35)
+
+    typed("ATLANTIC", "big", top=590, h=50, y=20, x=W * 0.27, font=MONT_B(25), color=ATL, gap=0.0)
+    typed("EAST PACIFIC", "big", top=590, h=50, y=20, x=W * 0.73, font=MONT_B(25), color=EPAC, gap=0.1)
+
     rows = [("NAMED STORMS", len(atl), len(ep)), ("HURRICANES", HU(atl), HU(ep)),
             ("MAJOR HURRICANES", MJ(atl), MJ(ep))]
     for i, (lab, a, e) in enumerate(rows):
-        r = px_axes(fig, 640 + i * 116, 106)
-        r.add_patch(plt.Rectangle((40, 0), W - 80, 106, color=PANEL))
-        r.text(W / 2, 82, lab, fontproperties=ROB_B(16), color=GREY, ha="center", va="center")
-        r.plot([W / 2, W / 2], [14, 62], color=RULE, lw=1.5)
-        r.text(W * 0.27, 36, str(a), fontproperties=MONT_XB(48), color=ATL, ha="center", va="center")
-        r.text(W * 0.73, 36, str(e), fontproperties=MONT_XB(48), color=EPAC, ha="center", va="center")
+        slide(name="row%d" % i, top=640 + i * 116, h=106, side=-1 if i % 2 == 0 else 1,
+              row=(lab, a, e), gap=0.3)
+    t += SLIDE_S + 0.25
 
-    if stage < 2:
-        footer(fig)
-        return
-    rec = px_axes(fig, 1000, 300)
-    rec.text(W / 2, 282, "PACIFIC RECORDS (FULL BASIN)", fontproperties=MONT_B(19),
-             color=GOLD, ha="center", va="center")
-    items = [("Highest cyclone energy ever measured", "beats 2018"),
-             ("11 major hurricanes", "ties 2015 for the most"),
-             ("3 Category 5 hurricanes", "ties the all-time record"),
-             ("Polo bottomed out at 892 mb", "2nd-most intense Pacific hurricane on record")]
-    for i, (a, b) in enumerate(items):
+    typed("PACIFIC RECORDS (FULL BASIN)", "big", top=1000, h=300, y=282, x=W / 2,
+          font=MONT_B(19), color=GOLD)
+    recs = [("Highest cyclone energy ever measured", "beats 2018"),
+            ("11 major hurricanes", "ties 2015 for the most"),
+            ("3 Category 5 hurricanes", "ties the all-time record"),
+            ("Polo bottomed out at 892 mb", "2nd-most intense Pacific hurricane on record")]
+    for i, (a, b) in enumerate(recs):
         yy = 224 - i * 60
-        rec.plot([96], [yy + 4], marker="o", ms=8, color=EPAC)
-        rec.text(122, yy + 11, a, fontproperties=ROB_B(18), color=WHITE, va="center")
-        rec.text(122, yy - 13, b, fontproperties=ROB(14), color=GREY, va="center")
+        items.append(dict(kind="dot", t0=t, top=1000, h=300, x=96, y=yy + 4))
+        typed(a, "mid", top=1000, h=300, y=yy + 11, x=122, left=True, font=ROB_B(18),
+              color=WHITE, gap=0.05)
+        typed(b, "small", top=1000, h=300, y=yy - 13, x=122, left=True, font=ROB(14),
+              color=GREY, gap=0.2)
 
-    if stage < 3:
-        footer(fig)
-        return
-    nt = px_axes(fig, 1310, 60)
-    nt.text(W / 2, 40, "El Niño: shear floods the Atlantic, and drains out of the Pacific.",
-            fontproperties=ROB_B(16), color=GOLD, ha="center", va="center")
-    nt.text(W / 2, 12, "East Pacific counts exclude the 5 Central Pacific storms.",
-            fontproperties=ROB(13), color=GREY, ha="center", va="center")
+    typed("El Niño: shear floods the Atlantic, and drains out of the Pacific.", "mid",
+          top=1310, h=60, y=40, x=W / 2, font=ROB_B(16), color=GOLD)
+    typed("East Pacific counts exclude the 5 Central Pacific storms.", "small",
+          top=1310, h=60, y=12, x=W / 2, font=ROB(13), color=GREY)
+    return items, t
+
+
+def c_duration(D):
+    return _c_items(D)[1]
+
+
+def _typed_text(fig, ax, x, y, text, n, font, color, left, cursor):
+    """Type `text` up to n chars. Centred lines are anchored at the left edge of the
+    full line, so the text doesn't shift sideways while it types."""
+    if left:
+        x0 = x
+    else:
+        probe = ax.text(x, y, text, fontproperties=font, ha="center", va="center", alpha=0)
+        x0 = probe.get_window_extent(fig.canvas.get_renderer()).x0
+        probe.remove()
+    shown = text[:n] + ("|" if cursor else "")
+    ax.text(x0, y, shown, fontproperties=font, color=color, ha="left", va="center")
+
+
+def seg_c(fig, t, D):
+    """t = seconds since the start of the scorecard."""
+    header(fig, "A tale of two oceans", "Season ends November 30")
+    items, _ = _c_items(D)
+    axes = {}
+
+    def get_ax(top, h):
+        if (top, h) not in axes:
+            axes[(top, h)] = px_axes(fig, top, h)
+        return axes[(top, h)]
+
+    slides = {}
+    for it in items:
+        if it["kind"] == "slide":
+            slides[it["name"]] = it
+
+    for it in items:
+        if t < it["t0"]:
+            continue
+        if it["kind"] == "slide":
+            p = _ease((t - it["t0"]) / SLIDE_S)
+            off = (1 - p) * W * it["side"]
+            a = get_ax(it["top"], it["h"])
+            a.add_patch(plt.Rectangle((40 + off, 0), W - 80, it["h"], color=PANEL))
+            if "row" in it:
+                lab, va, ve = it["row"]
+                h = it["h"]
+                a.text(W / 2 + off, 82, lab, fontproperties=ROB_B(16), color=GREY,
+                       ha="center", va="center")
+                a.plot([W / 2 + off] * 2, [14, 62], color=RULE, lw=1.5)
+                a.text(W * 0.27 + off, 36, str(va), fontproperties=MONT_XB(48), color=ATL,
+                       ha="center", va="center")
+                a.text(W * 0.73 + off, 36, str(ve), fontproperties=MONT_XB(48), color=EPAC,
+                       ha="center", va="center")
+        elif it["kind"] == "dot":
+            get_ax(it["top"], it["h"]).plot([it["x"]], [it["y"]], marker="o", ms=8, color=EPAC)
+        elif it["kind"] == "type":
+            if "ax" in it:
+                s_ = slides[it["ax"][0]]
+                a, y, x = get_ax(s_["top"], s_["h"]), it["ax"][1], W / 2
+            else:
+                a, y, x = get_ax(it["top"], it["h"]), it["y"], it["x"]
+            k = (t - it["t0"]) / it["dur"]
+            n = len(it["text"]) if k >= 1 else int(k * len(it["text"]))
+            _typed_text(fig, a, x, y, it["text"], n, it["font"], it["color"],
+                        it.get("left", False), cursor=k < 1)
     footer(fig)
 
 
@@ -365,12 +435,16 @@ def render(seg, frac, path):
     plt.close(fig)
 
 
+def frame_name(seg, frac):
+    return "%s_%.6f.png" % (seg, frac)
+
+
 def one(args):
-    i, seg, frac = args
-    p = os.path.join(FRAMES, "f%04d.png" % i)
-    if not os.path.exists(p):
+    seg, frac = args
+    p = os.path.join(FRAMES, frame_name(seg, frac))
+    if not os.path.exists(p):              # cache: A/B survive scorecard edits
         render(seg, frac, p)
-    return i
+    return p
 
 
 def _sweep(seg, lead, length, hold):
@@ -385,9 +459,9 @@ def plan():
     """(segment, frac) per output frame, in order."""
     seq = _sweep("A", A_LEAD, A_SWEEP, A_HOLD)
     seq += _sweep("B", B_LEAD, B_SWEEP, B_HOLD)
-    n = len(C_STAGES) - 1
-    for i, secs in enumerate(C_STAGES):
-        seq += [("C", i / n)] * int(secs * FPS)
+    dur = c_duration(load())
+    seq += [("C", t) for t in np.arange(0, dur, 1 / FPS)]
+    seq += [("C", round(dur + 0.5, 6))] * int(C_HOLD * FPS)
     return seq
 
 
@@ -403,22 +477,21 @@ def main():
         return
     seq = plan()
     uniq = sorted(set(seq), key=lambda x: ("ABC".index(x[0]), x[1]))
-    idx = {k: i for i, k in enumerate(uniq)}
     os.makedirs(FRAMES, exist_ok=True)
     with get_context("fork").Pool(os.cpu_count(), initializer=init) as pool:
-        for k, _ in enumerate(pool.imap_unordered(
-                one, [(idx[u], u[0], u[1]) for u in uniq]), 1):
+        for k, _ in enumerate(pool.imap_unordered(one, uniq), 1):
             if k % 50 == 0:
                 print("%d/%d frames" % (k, len(uniq)), flush=True)
     lst = os.path.join(FRAMES, "list.txt")
     with open(lst, "w") as fh:
         for s in seq:
-            fh.write("file 'f%04d.png'\nduration %.6f\n" % (idx[s], 1 / FPS))
+            fh.write("file '%s'\nduration %.6f\n" % (frame_name(*s), 1 / FPS))
     mp4 = os.path.join(OUT, "hurricane_2026_reel.mp4")
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", lst,
                     "-r", str(FPS), "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "19",
                     "-preset", "slow", "-movflags", "+faststart", mp4], check=True)
-    shutil.rmtree(FRAMES, ignore_errors=True)
+    if not os.environ.get("KEEP_FRAMES"):
+        shutil.rmtree(FRAMES, ignore_errors=True)
     print("done:", mp4, "frames:", len(seq), "duration: %.1fs" % (len(seq) / FPS))
 
 
