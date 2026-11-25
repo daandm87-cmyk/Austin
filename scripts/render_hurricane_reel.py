@@ -57,10 +57,15 @@ T1 = datetime(2026, 11, 30)
 SPAN = (T1 - T0).total_seconds()
 FPS = 30
 
-# segment lengths in seconds
-A_SWEEP, A_HOLD = 8.0, 1.6
-B_SWEEP, B_HOLD = 9.0, 1.6
-C_HOLD = 4.5
+# Segment lengths in seconds. Pacing rule: every segment gets a lead-in so the
+# layout can be read before anything moves, a sweep, narrative pauses on the two
+# moments that carry the story, and a hold long enough to read the finished state.
+A_LEAD, A_SWEEP, A_HOLD = 1.2, 7.5, 3.8
+B_LEAD, B_SWEEP, B_HOLD = 1.0, 10.0, 4.2
+C_STAGES = [2.0, 2.5, 3.0, 3.5]          # hero / numbers / records / all
+BEAT_SEP, BEAT_OCT = datetime(2026, 9, 21), datetime(2026, 10, 8, 12)
+A_BEATS = {BEAT_OCT: 1.2}
+B_BEATS = {BEAT_SEP: 1.2, BEAT_OCT: 1.6}
 
 MAPS = {  # basin -> (lon0, lon1, lat0, lat1)
     "atlantic": (-102, -18, 9.5, 43),
@@ -285,6 +290,8 @@ def seg_b(fig, frac, D):
 
 # ----------------------------------------------------------------- segment C
 def seg_c(fig, frac, D):
+    """frac encodes the reveal stage: 0 hero, 1 +numbers, 2 +records, 3 +note."""
+    stage = int(round(frac * (len(C_STAGES) - 1)))
     header(fig, "A tale of two oceans", "Season ends November 30")
     atl = [r for r in D["season"] if r["basin"] == "atlantic"]
     ep = [r for r in D["season"] if r["basin"] == "epac"]
@@ -300,6 +307,9 @@ def seg_c(fig, frac, D):
     hero.text(W / 2, 36, "Only 1907 and 1914 went a whole season without one",
               fontproperties=ROB(17), color=GREY, ha="center", va="center")
 
+    if stage < 1:
+        footer(fig)
+        return
     hd = px_axes(fig, 590, 50)
     hd.text(W * 0.27, 20, "ATLANTIC", fontproperties=MONT_B(25), color=ATL, ha="center", va="center")
     hd.text(W * 0.73, 20, "EAST PACIFIC", fontproperties=MONT_B(25), color=EPAC, ha="center", va="center")
@@ -313,6 +323,9 @@ def seg_c(fig, frac, D):
         r.text(W * 0.27, 36, str(a), fontproperties=MONT_XB(48), color=ATL, ha="center", va="center")
         r.text(W * 0.73, 36, str(e), fontproperties=MONT_XB(48), color=EPAC, ha="center", va="center")
 
+    if stage < 2:
+        footer(fig)
+        return
     rec = px_axes(fig, 1000, 300)
     rec.text(W / 2, 282, "PACIFIC RECORDS (FULL BASIN)", fontproperties=MONT_B(19),
              color=GOLD, ha="center", va="center")
@@ -326,6 +339,9 @@ def seg_c(fig, frac, D):
         rec.text(122, yy + 11, a, fontproperties=ROB_B(18), color=WHITE, va="center")
         rec.text(122, yy - 13, b, fontproperties=ROB(14), color=GREY, va="center")
 
+    if stage < 3:
+        footer(fig)
+        return
     nt = px_axes(fig, 1310, 60)
     nt.text(W / 2, 40, "El Niño: shear floods the Atlantic, and drains out of the Pacific.",
             fontproperties=ROB_B(16), color=GOLD, ha="center", va="center")
@@ -361,16 +377,32 @@ def one(args):
     return i
 
 
+def _frac_of(d):
+    return (d - T0).total_seconds() / SPAN
+
+
+def _sweep(seg, lead, length, hold, beats):
+    """Lead-in, sweep with a pause on each beat date, then a hold on the end state."""
+    seq = [(seg, 0.0)] * int(lead * FPS)
+    fr = list(np.linspace(0, 1, int(length * FPS)))
+    marks = sorted((_frac_of(d), n) for d, n in beats.items())
+    mi = 0
+    for t in fr:
+        seq.append((seg, t))
+        if mi < len(marks) and t >= marks[mi][0]:
+            seq += [(seg, t)] * int(marks[mi][1] * FPS)   # pause on the cached frame
+            mi += 1
+    seq += [(seg, 1.0)] * int(hold * FPS)
+    return seq
+
+
 def plan():
     """(segment, frac) per output frame, in order."""
-    seq = []
-    seq += [("A", 0.0)] * int(0.5 * FPS)
-    seq += [("A", t) for t in np.linspace(0, 1, int(A_SWEEP * FPS))]
-    seq += [("A", 1.0)] * int(A_HOLD * FPS)
-    seq += [("B", 0.0)] * int(0.3 * FPS)
-    seq += [("B", t) for t in np.linspace(0, 1, int(B_SWEEP * FPS))]
-    seq += [("B", 1.0)] * int(B_HOLD * FPS)
-    seq += [("C", 0.0)] * int(C_HOLD * FPS)
+    seq = _sweep("A", A_LEAD, A_SWEEP, A_HOLD, A_BEATS)
+    seq += _sweep("B", B_LEAD, B_SWEEP, B_HOLD, B_BEATS)
+    n = len(C_STAGES) - 1
+    for i, secs in enumerate(C_STAGES):
+        seq += [("C", i / n)] * int(secs * FPS)
     return seq
 
 
