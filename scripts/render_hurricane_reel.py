@@ -60,9 +60,9 @@ FPS = 30
 # Segment lengths in seconds. Pacing rule: every segment gets a lead-in so the
 # layout can be read before anything moves, a sweep, narrative pauses on the two
 # moments that carry the story, and a hold long enough to read the finished state.
-A_LEAD, A_SWEEP, A_HOLD = 1.2, 7.5, 3.8
-B_LEAD, B_SWEEP, B_HOLD = 1.0, 10.0, 4.2
-C_STAGES = [2.0, 2.5, 3.0, 3.5]          # hero / numbers / records / all
+A_LEAD, A_SWEEP, A_HOLD = 1.2, 11.0, 3.0
+B_LEAD, B_SWEEP, B_HOLD = 1.0, 17.0, 3.5
+C_STAGES = [1.8, 2.2, 2.5, 2.5]          # hero / numbers / records / all
 BEAT_SEP, BEAT_OCT = datetime(2026, 9, 21), datetime(2026, 10, 8, 12)
 A_BEATS = {BEAT_OCT: 1.2}
 B_BEATS = {BEAT_SEP: 1.2, BEAT_OCT: 1.6}
